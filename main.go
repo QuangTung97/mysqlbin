@@ -2,11 +2,15 @@ package main
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"github.com/go-mysql-org/go-mysql/mysql"
 	"github.com/go-mysql-org/go-mysql/replication"
+	"github.com/jmoiron/sqlx"
 	"sync"
 	"time"
+
+	_ "github.com/go-sql-driver/mysql"
 )
 
 // CoreEvent ...
@@ -81,6 +85,16 @@ func readFromBinlog(syncer *replication.BinlogSyncer, lastGTIDSet string, output
 }
 
 func main() {
+	db := sqlx.MustConnect(flavorMysql, "root:1@tcp(localhost:3306)/bench?parseTime=true")
+
+	var lastGTIDSet string
+	err := db.Get(&lastGTIDSet, "SELECT gtid_set FROM last_event_seq WHERE name = ?", "core_event")
+	if err != nil && err == sql.ErrNoRows {
+		fmt.Println(err)
+	}
+
+	fmt.Println("LAST GTID SET:", lastGTIDSet)
+
 	conf := replication.BinlogSyncerConfig{
 		ServerID:  101,
 		Flavor:    flavorMysql,
@@ -95,8 +109,6 @@ func main() {
 
 	ch := make(chan BinlogCommittedEvent, 1024)
 
-	var lastGTIDSet = ""
-
 	var wg sync.WaitGroup
 	wg.Add(2)
 
@@ -110,7 +122,16 @@ func main() {
 		defer wg.Done()
 
 		for e := range ch {
-			fmt.Println(e.GTIDSet, e.Events)
+			for _, event := range e.Events {
+				fmt.Println(event.ID, string(event.Data))
+			}
+			if len(e.Events) > 0 {
+				db.MustExec(`
+INSERT INTO last_event_seq (name, gtid_set)
+VALUES (?, ?) AS NEW
+ON DUPLICATE KEY UPDATE gtid_set = NEW.gtid_set
+`, "core_event", e.GTIDSet)
+			}
 		}
 	}()
 
