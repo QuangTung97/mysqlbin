@@ -110,6 +110,9 @@ func TestGTIDSet__Single_SID__Grouping_In_Middle(t *testing.T) {
 			{From: 18, To: 20},
 		},
 	}, s)
+
+	uuidStr := id.String()
+	assert.Equal(t, uuidStr+":2-4:6-8:18-20", s.String())
 }
 
 func TestGTIDSet__Single_SID__At_Beginning(t *testing.T) {
@@ -171,4 +174,13 @@ func TestGTIDSet__Multi_SID(t *testing.T) {
 			{From: 1, To: 20},
 		},
 	}, s)
+
+	uuidStr1 := id1.String() + ":1-20"
+	uuidStr2 := id2.String() + ":1-20"
+
+	if uuidStr1 > uuidStr2 {
+		uuidStr2, uuidStr1 = uuidStr1, uuidStr2
+	}
+
+	assert.Equal(t, uuidStr1+","+uuidStr2, s.String())
 }
